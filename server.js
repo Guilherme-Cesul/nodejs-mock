@@ -2,31 +2,53 @@ const express = require('express');
 const app = express();
 const port = 3000;
 
-const products = [];
+app.use(express.json());
+
+let products = [];
 
 app.get('/', (req, res) => {
     res.send('Server Online!');
 });
 
 app.get('/products', (req, res) => {
-    const { status } = req.query;
-    res.json({ status }).send();
+    res.json({ products: products }).send();
 });
 
 app.post('/products', (req, res) => {
-    res.status(201).json(products).send();
+    const { name, cpf, city } = req.body;
+
+    products.push({ id: products.length + 1, name, cpf, city });
+
+    res.status(201).json().send();
 });
 
-app.put('/products', (req, res) => {
+app.put('/products/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, cpf, city } = req.body;
+
+    const productIndex = products.findIndex(product => product.id === id);
+    if (productIndex === -1) {
+        return res.status(404).send();
+    }
+
+    products[productIndex] = { ...products[productIndex], name };
+
     res.status(204).json(products).send();
 });
 
-app.patch('/products', (req, res) => {
-    res.status(204).json(products).send();
+app.patch('/products/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, cpf, city } = req.body;
+
+
 });
 
-app.delete('/products', (req, res) => {
-    res.status(204).json(products).send();
+app.delete('/products/:id', (req, res) => {
+    const { id } = req.params;
+    products = products.filter(product => product.id != id);
+    
+
+    res.status(200).json({ products }).send();
 });
     
 app.listen(port, () => {
