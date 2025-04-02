@@ -1,5 +1,9 @@
-import express, {request} from "express";
+import express, {NextFunction, Request, Response} from "express";
 import { seedUserStore, users } from "./database";
+import { generateJwtAndRefreshToken } from "./auth";
+import jwt from "jsonwebtoken";
+import { auth } from "./config";
+import { DecodedToken } from "./types";
 
 const port = 3333;
 const app = express();
@@ -7,6 +11,38 @@ const app = express();
 app.use(express.json());
 
 seedUserStore();
+
+function checkAuthMiddleware(request: Request, response: Response, next: NextFunction) {
+    const { authorization } = request.headers;
+
+    if (!authorization) {
+        return response.status(401).json({ error: true, code: "token.invalid", message: "Token does not exists" });
+    }
+
+    const [, token] = authorization.split(' ');
+
+    if (!token) {
+        return response
+            .status(401)
+            .json({ error: true, code: "token.invalid", message: "Token does not exists"});
+    }
+
+    try {
+        const decoded = jwt.verify(token, auth.secret) as DecodedToken;
+
+        request.user = decoded.sub;
+
+        return next();
+    } catch (error) {
+        return response
+            .status(401)
+            .json({ error: true, code: "token.invalid", message: "Token does not exists"});
+    }
+
+    console.log(authorization);
+
+    return next();
+}
 
 app.post('/sessions', (request, response) => {
     const { email, password } = request.body;
@@ -19,19 +55,34 @@ app.post('/sessions', (request, response) => {
         });
     }
 
-    return response.json({
-        token: "teste",
-        refreshToken: "teste",
+    const { token } = generateJwtAndRefreshToken (email, {
+        permissions: user.permissions,
+        roles: user.roles,
     });
-    // Pegar o Usuario e Senha
-    // Buscar no banco o usuario
-    // Erro 401 quando não encontrar usuario
-    // Descriptografar a senha 
-    // Verificar a senha informada com a senha do banco
-    // Erro 401 quando a senha do usuario nao esta valida
-    // Gerar o Token e o Refresh Token
-    // Retornar Token e Refresh Token
+
+    return response.json({
+        token
+
+    });
 });
+
+app.get('/me', checkAuthMiddleware, (request, response) => {
+    const email = request.user;
+
+    const user = users.get(email);
+
+    if(!user) {
+        return response
+            .status(404)
+            .json({ error: true, message: "User not Found."});
+    }
+
+    return response.json({
+        email,
+        permissions: user.permissions,
+        roles: user.roles,
+    })
+})
 
 app.listen(port, () => (
     console.log(`Listening on port ${port}`)
